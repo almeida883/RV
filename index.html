@@ -1,0 +1,576 @@
+<!doctype html>
+<html lang="pt">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Bitfinex BTC/USD — 12H Focus</title>
+  <script src="https://unpkg.com/lightweight-charts@4.2.3/dist/lightweight-charts.standalone.production.js"></script>
+  <style>
+    body {
+      margin:0; height:100vh; background:#0b0f14; color:#d6e1f0;
+      font-family:system-ui,sans-serif; display:flex; flex-direction:column;
+    }
+    header,footer {
+      padding:10px 14px; border-bottom:1px solid #1b2733; background:#0f141a;
+      display:flex; align-items:center; gap:8px; flex-wrap:wrap;
+    }
+    footer{border-top:1px solid #1b2733;border-bottom:none;justify-content:center;font-size:12px;color:#8aa0b5;}
+    kbd{background:#1b2733;padding:2px 6px;border-radius:3px;font-size:11px;font-family:monospace;}
+    #chartsWrapper { flex:1; display:flex; flex-direction:column; gap:2px; }
+    #chart { flex:3; min-height:400px; position:relative; }        
+    #mvrvChart, #soprChart { flex:1; height:200px; position:relative; }  
+    button,input{background:#0f141a;color:#d6e1f0;border:1px solid #1b2733;padding:6px 8px;border-radius:6px;cursor:pointer;}
+    .chart-title{position:absolute;top:8px;left:8px;z-index:10;font-size:12px;font-weight:600;color:#8aa0b5;pointer-events:none;}
+    #progress{font-size:12px;color:#8aa0b5;}
+    #livePrice{font-size:18px;font-weight:bold;color:#2dd4bf;margin-left:auto;}
+    #priceChange{font-size:14px;margin-left:8px;padding:4px 8px;border-radius:4px;}
+    .positive{background:#1e3a32;color:#2dd4bf;}
+    .negative{background:#3a1e1e;color:#f97373;}
+    #backtestSection{padding:20px;background:#0f141a;border-top:2px solid #1b2733;}
+    .backtest-summary{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin-bottom:20px;}
+    .stat-card{background:#1a2332;padding:12px;border-radius:8px;border:1px solid #1b2733;}
+    .stat-label{font-size:11px;color:#8aa0b5;text-transform:uppercase;margin-bottom:4px;}
+    .stat-value{font-size:20px;font-weight:bold;}
+    .stat-value.green{color:#2dd4bf;}
+    .stat-value.red{color:#f97373;}
+    .trades-table{width:100%;border-collapse:collapse;font-size:13px;}
+    .trades-table-wrapper{max-height:400px;overflow-y:auto;display:block;}
+    .trades-table thead{background:#1a2332;position:sticky;top:0;z-index:1;}
+    .trades-table th{padding:10px;text-align:left;font-weight:600;border-bottom:2px solid #1b2733;color:#8aa0b5;}
+    .trades-table td{padding:10px;border-bottom:1px solid #1b2733;}
+    .trades-table tr.profit{background:rgba(45,212,191,0.05);}
+    .trades-table tr.loss{background:rgba(249,115,115,0.05);}
+    h3{margin:20px 0 10px 0;color:#d6e1f0;font-size:16px;}
+  </style>
+</head>
+<body>
+  <header>
+    <strong>📈 Bitfinex — 12H</strong>
+    <label>Símbolo</label>
+    <input id="symbol" value="tBTCUSD" size="8">
+    <label style="margin-left:20px;">Filtro:</label>
+    <input type="date" id="startDate" style="width:140px;">
+    <span style="color:#8aa0b5;">até</span>
+    <input type="date" id="endDate" style="width:140px;">
+    <button id="applyFilter">Aplicar</button>
+    <div id="progress"></div>
+    <div style="flex:1"></div>
+    <div id="livePrice">--</div>
+    <div id="priceChange">--</div>
+    <button id="theme">Tema</button>
+    <button id="clearCache">Limpar Cache</button>
+  </header>
+
+  <div id="chartsWrapper">
+    <div id="chart"><div class="chart-title">BTC/USD 12H • SMA200</div></div>
+    <div id="mvrvChart"><div class="chart-title">MVRV (Market Value / Realized Value)</div></div>
+    <div id="soprChart"><div class="chart-title">aSOPR (Adjusted SOPR)</div></div>
+  </div>
+
+  <div id="backtestSection">
+    <h3>📊 Resultados do Backtesting</h3>
+    <div class="backtest-summary" id="backtestSummary"></div>
+    
+    <h3>📅 Resultados por Mês</h3>
+    <div class="trades-table-wrapper" style="max-height:300px;">
+      <table class="trades-table">
+        <thead>
+          <tr>
+            <th>Mês</th>
+            <th>Trades</th>
+            <th>Retorno %</th>
+          </tr>
+        </thead>
+        <tbody id="monthlyTableBody"></tbody>
+      </table>
+    </div>
+
+    <h3>📆 Resultados por Ano</h3>
+    <div class="trades-table-wrapper" style="max-height:200px;">
+      <table class="trades-table">
+        <thead>
+          <tr>
+            <th>Ano</th>
+            <th>Trades</th>
+            <th>Retorno %</th>
+          </tr>
+        </thead>
+        <tbody id="yearlyTableBody"></tbody>
+      </table>
+    </div>
+    
+    <h3>📋 Histórico de Trades</h3>
+    <div class="trades-table-wrapper">
+      <table class="trades-table">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Data Compra</th>
+            <th>Preço Compra</th>
+            <th>Data Venda</th>
+            <th>Preço Venda</th>
+            <th>Lucro/Prejuízo</th>
+            <th>%</th>
+          </tr>
+        </thead>
+        <tbody id="tradesTableBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <footer>
+    Dados via Bitfinex Public REST • 12H com Rosa dos Ventos | 
+    <span style="color:#8aa0b5;">Atalhos: <kbd>F</kbd> ajustar, <kbd>R</kbd> recarregar</span>
+  </footer>
+
+  <script type="module">
+    import { monalisaStrategy, computeMVRV, computeASOPR } from './monalisa.js';
+
+    const el = s => document.querySelector(s);
+    const proxy = "https://corsproxy.io/?";
+    const API = "https://api-pub.bitfinex.com/v2";
+    let priceChart, mvrvChart, soprChart;
+    let candleSeries, mvrvSeries, soprSeries;
+    let dark = true;
+
+    const state={symbol:"tBTCUSD",tf:"12h",cache:{}};
+
+    function makeChart(container){
+      return LightweightCharts.createChart(container,{
+        autoSize:true,
+        layout:{background:{type:'solid',color:dark?'#0b0f14':'#ffffff'},textColor:dark?'#c6d2e3':'#111'},
+        grid:{vertLines:{color:'rgba(70,82,94,.2)'},horzLines:{color:'rgba(70,82,94,.2)'}},
+        rightPriceScale:{borderColor:'rgba(70,82,94,.3)',scaleMargins:{top:0.1,bottom:0.1}},
+        timeScale:{borderColor:'rgba(70,82,94,.3)',timeVisible:true,secondsVisible:false},
+        crosshair:{
+          mode:LightweightCharts.CrosshairMode.Normal,
+          vertLine:{width:1,color:'rgba(150,160,170,0.5)',style:2},
+          horzLine:{width:1,color:'rgba(150,160,170,0.5)',style:2}
+        },
+        handleScroll:{mouseWheel:true,pressedMouseMove:true,horzTouchDrag:true,vertTouchDrag:true},
+        handleScale:{axisPressedMouseMove:true,mouseWheel:true,pinch:true},
+      });
+    }
+
+    function initCharts(){
+      el("#chart").innerHTML="";
+      el("#mvrvChart").innerHTML="";
+      el("#soprChart").innerHTML="";
+
+      priceChart = makeChart(el("#chart"));
+      mvrvChart = makeChart(el("#mvrvChart"));
+      soprChart = makeChart(el("#soprChart"));
+
+      candleSeries = priceChart.addCandlestickSeries({
+        upColor:'#2dd4bf',downColor:'#f97373',borderVisible:false,wickUpColor:'#2dd4bf',wickDownColor:'#f97373',
+        priceFormat:{type:'price',precision:2,minMove:0.01}
+      });
+      mvrvSeries = mvrvChart.addLineSeries({ 
+        color:'#3b82f6', 
+        lineWidth:2,
+        priceFormat:{type:'price',precision:3,minMove:0.001},
+        crosshairMarkerVisible:true,
+        crosshairMarkerRadius:4
+      });
+      soprSeries = soprChart.addLineSeries({ 
+        color:'#f59e0b', 
+        lineWidth:2,
+        priceFormat:{type:'price',precision:3,minMove:0.001},
+        crosshairMarkerVisible:true,
+        crosshairMarkerRadius:4
+      });
+
+      // Linhas de referência MVRV = 1 e aSOPR = 1
+      const mvrvRefLine = mvrvChart.addLineSeries({
+        color:'rgba(255,255,255,0.3)',
+        lineWidth:1,
+        lineStyle:2,
+        priceLineVisible:false,
+        lastValueVisible:false
+      });
+      const soprRefLine = soprChart.addLineSeries({
+        color:'rgba(255,255,255,0.3)',
+        lineWidth:1,
+        lineStyle:2,
+        priceLineVisible:false,
+        lastValueVisible:false
+      });
+      
+      state.mvrvRefLine = mvrvRefLine;
+      state.soprRefLine = soprRefLine;
+
+      // Sincronizar zoom entre todos os gráficos
+      priceChart.timeScale().subscribeVisibleLogicalRangeChange(range=>{
+        if(!range)return;
+        mvrvChart.timeScale().setVisibleLogicalRange(range);
+        soprChart.timeScale().setVisibleLogicalRange(range);
+      });
+    }
+
+    async function fetchBitfinex(symbol="tBTCUSD", timeframe="12h", limit=1000, end=null){
+      const params = new URLSearchParams({limit, sort:-1});
+      if(end) params.set("end", end);
+      const url = `${API}/candles/trade:${timeframe}:${symbol}/hist?${params}`;
+      const res = await fetch(proxy + encodeURIComponent(url));
+      if(!res.ok) throw new Error("HTTP "+res.status);
+      const raw = await res.json();
+      return raw.reverse().map(r=>({
+        time:Math.floor(r[0]/1000),
+        open:r[1],
+        close:r[2],
+        high:r[3],
+        low:r[4]
+      }));
+    }
+
+    async function fetchAllHistorical(symbol, timeframe, totalCandles = 5000) {
+      const maxPerRequest = 1000;
+      let allData = [];
+      let end = null;
+      
+      while (allData.length < totalCandles) {
+        const batch = await fetchBitfinex(symbol, timeframe, maxPerRequest, end);
+        if (!batch.length) break;
+        
+        allData = batch.concat(allData);
+        end = batch[0].time * 1000 - 1;
+        
+        el("#progress").textContent = `A carregar: ${allData.length}/${totalCandles} velas...`;
+        
+        if (batch.length < maxPerRequest) break;
+      }
+      
+      return allData.slice(-totalCandles);
+    }
+
+  async function fetchAll(){
+  el("#progress").textContent="A carregar dados 12H...";
+  const data = await fetchAllHistorical(state.symbol, "12h", 5000);
+  state.cache["12h"]=data;
+  localStorage.setItem(`${state.symbol}_12h`,JSON.stringify(data));
+  el("#progress").textContent=`12H: ${data.length} velas carregadas`;
+
+  candleSeries.setData(data);
+  priceChart.timeScale().fitContent();
+
+  // === 📈 SMA200 ===
+  const sma200Series = priceChart.addLineSeries({
+    color: 'rgba(255,255,255,0.6)',
+    lineWidth: 2
+  });
+  const smaData = [];
+  for (let i = 0; i < data.length; i++) {
+    if (i < 199) continue;
+    const slice = data.slice(i - 199, i + 1);
+    const avg = slice.reduce((a,b)=>a+b.close,0) / slice.length;
+    smaData.push({ time: data[i].time, value: avg });
+  }
+  sma200Series.setData(smaData);
+
+  // === Indicadores secundários ===
+  const mvrv = computeMVRV(data);
+  const sopr = computeASOPR(data); 
+  mvrvSeries.setData(mvrv);
+  soprSeries.setData(sopr);
+
+  // Linhas de referência em 1.0
+  const refLineData = data.map(d => ({time: d.time, value: 1.0}));
+  state.mvrvRefLine.setData(refLineData);
+  state.soprRefLine.setData(refLineData);
+
+  // Adicionar price lines para valores importantes
+  mvrvSeries.createPriceLine({
+    price: 1.0,
+    color: 'rgba(255,255,255,0.5)',
+    lineWidth: 1,
+    lineStyle: 2,
+    axisLabelVisible: true,
+    title: 'Neutro'
+  });
+  
+  soprSeries.createPriceLine({
+    price: 1.0,
+    color: 'rgba(255,255,255,0.5)',
+    lineWidth: 1,
+    lineStyle: 2,
+    axisLabelVisible: true,
+    title: 'Neutro'
+  });
+
+  connectLivePriceOverlay(state.symbol);
+  updateMonalisa(); 
+}
+
+
+    el("#symbol").onchange=()=>{state.symbol=el("#symbol").value.trim();localStorage.clear();state.cache={};fetchAll();};
+    el("#theme").onclick=()=>{dark=!dark;initCharts();fetchAll();};
+    el("#clearCache").onclick=()=>{localStorage.clear();alert("Cache limpo. Recarrega a página.");};
+    el("#applyFilter").onclick=()=>{updateMonalisa();};
+
+    initCharts();
+    fetchAll();
+
+    // Atalhos de teclado
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'f' || e.key === 'F') {
+        priceChart.timeScale().fitContent();
+        e.preventDefault();
+      }
+      if (e.key === 'r' || e.key === 'R') {
+        fetchAll();
+        e.preventDefault();
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key === '=') {
+        priceChart.timeScale().scrollToPosition(-10, false);
+        e.preventDefault();
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key === '-') {
+        priceChart.timeScale().scrollToPosition(10, false);
+        e.preventDefault();
+      }
+    });
+
+    let initialPrice = null;
+
+    function connectLivePriceOverlay(symbol = 'tBTCUSD') {
+      const ws = new WebSocket('wss://api-pub.bitfinex.com/ws/2');
+      ws.onopen = () => ws.send(JSON.stringify({ event: 'subscribe', channel: 'ticker', symbol }));
+      ws.onmessage = (msg) => {
+        const data = JSON.parse(msg.data);
+        if (Array.isArray(data) && Array.isArray(data[1])) {
+          const lastPrice = data[1][6];
+          const dailyChange = data[1][4];
+          const dailyChangePerc = data[1][5];
+          
+          // Atualizar display do preço
+          el("#livePrice").textContent = `$${lastPrice.toLocaleString('pt-PT', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+          
+          const changeEl = el("#priceChange");
+          const sign = dailyChange >= 0 ? '+' : '';
+          changeEl.textContent = `${sign}${dailyChangePerc.toFixed(2)}%`;
+          changeEl.className = dailyChange >= 0 ? 'positive' : 'negative';
+          
+          // Atualizar vela no gráfico
+          const cache = state.cache["12h"];
+          if (!cache || !cache.length) return;
+          const last = cache[cache.length - 1];
+          const update = {
+            time: last.time,
+            open: last.open,
+            high: Math.max(last.high, lastPrice),
+            low: Math.min(last.low, lastPrice),
+            close: lastPrice
+          };
+          candleSeries.update(update);
+        }
+      };
+      ws.onclose = () => setTimeout(() => connectLivePriceOverlay(symbol), 2000);
+    }
+
+    function updateMonalisa() {
+      const data = state.cache["12h"];
+      if (!data || !data.length) return;
+
+      const signals = monalisaStrategy(data);
+      if (!signals || !signals.length) return;
+
+      const markers = signals.map(s => ({
+        time: s.time,
+        position: s.type === "buy" ? "belowBar" : "aboveBar",
+        color: s.type === "buy" ? "#00ff88" : "#ff4b4b",
+        shape: s.type === "buy" ? "arrowUp" : "arrowDown",
+        text: s.type === "buy" ? "COMPRAR 🚀" : "VENDER 📉",
+        size: 1.2
+      }));
+
+      candleSeries.setMarkers(markers);
+      
+      // Executar backtesting
+      runBacktest(data, signals);
+    }
+
+    function runBacktest(data, signals) {
+      const trades = [];
+      let currentTrade = null;
+
+      for (const signal of signals) {
+        const candle = data.find(d => d.time === signal.time);
+        if (!candle) continue;
+
+        if (signal.type === "buy") {
+          currentTrade = {
+            buyDate: new Date(signal.time * 1000),
+            buyPrice: candle.close,
+            buyTime: signal.time
+          };
+        } else if (signal.type === "sell" && currentTrade) {
+          currentTrade.sellDate = new Date(signal.time * 1000);
+          currentTrade.sellPrice = candle.close;
+          currentTrade.profit = currentTrade.sellPrice - currentTrade.buyPrice;
+          currentTrade.profitPercent = ((currentTrade.profit / currentTrade.buyPrice) * 100);
+          trades.push(currentTrade);
+          currentTrade = null;
+        }
+      }
+
+      // Aplicar filtro de data se definido
+      const startDate = el("#startDate").value ? new Date(el("#startDate").value) : null;
+      const endDate = el("#endDate").value ? new Date(el("#endDate").value + "T23:59:59") : null;
+      
+      let filteredTrades = trades;
+      if (startDate || endDate) {
+        filteredTrades = trades.filter(t => {
+          const sellDate = t.sellDate;
+          if (startDate && sellDate < startDate) return false;
+          if (endDate && sellDate > endDate) return false;
+          return true;
+        });
+      }
+      
+      // Usar trades filtradas para cálculos
+      const allTrades = filteredTrades;
+
+      // Calcular estatísticas (usando trades filtradas)
+      const totalTrades = allTrades.length;
+      const profitTrades = allTrades.filter(t => t.profit > 0).length;
+      const lossTrades = allTrades.filter(t => t.profit < 0).length;
+      const winRate = totalTrades > 0 ? (profitTrades / totalTrades * 100) : 0;
+      const totalProfit = allTrades.reduce((sum, t) => sum + t.profit, 0);
+      const avgProfit = totalTrades > 0 ? totalProfit / totalTrades : 0;
+      const totalProfitPercent = allTrades.reduce((sum, t) => sum + t.profitPercent, 0);
+      const avgProfitPercent = totalTrades > 0 ? totalProfitPercent / totalTrades : 0;
+
+      // Calcular retornos (com e sem juros compostos)
+      const totalReturnSimple = totalProfitPercent; // Soma simples de todas as %
+      
+      // Com juros compostos
+      const initialCapital = 10000;
+      let capital = initialCapital;
+      allTrades.forEach(t => {
+        capital += (capital * t.profitPercent / 100);
+      });
+      const totalReturnCompound = ((capital - initialCapital) / initialCapital * 100);
+      
+      // Determinar período do backtest
+      const firstYear = allTrades.length > 0 ? allTrades[0].buyDate.getFullYear() : new Date().getFullYear();
+      const lastYear = allTrades.length > 0 ? allTrades[allTrades.length - 1].sellDate.getFullYear() : new Date().getFullYear();
+
+      // Análise Mensal e Anual
+      const monthlyResults = {};
+      const yearlyResults = {};
+      
+      allTrades.forEach(t => {
+        const year = t.sellDate.getFullYear();
+        const month = `${year}-${String(t.sellDate.getMonth() + 1).padStart(2, '0')}`;
+        
+        if (!monthlyResults[month]) {
+          monthlyResults[month] = { trades: 0, profit: 0, profitPercent: 0 };
+        }
+        if (!yearlyResults[year]) {
+          yearlyResults[year] = { trades: 0, profit: 0, profitPercent: 0 };
+        }
+        
+        monthlyResults[month].trades++;
+        monthlyResults[month].profit += t.profit;
+        monthlyResults[month].profitPercent += t.profitPercent;
+        
+        yearlyResults[year].trades++;
+        yearlyResults[year].profit += t.profit;
+        yearlyResults[year].profitPercent += t.profitPercent;
+      });
+
+      // Atualizar UI - Resumo
+      const summaryHTML = `
+        <div class="stat-card">
+          <div class="stat-label">Total de Trades</div>
+          <div class="stat-value">${totalTrades}</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Taxa de Acerto</div>
+          <div class="stat-value ${winRate >= 50 ? 'green' : 'red'}">${winRate.toFixed(1)}%</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Lucros / Perdas</div>
+          <div class="stat-value">${profitTrades} / ${lossTrades}</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">% Médio por Trade</div>
+          <div class="stat-value ${avgProfitPercent >= 0 ? 'green' : 'red'}">${avgProfitPercent.toFixed(2)}%</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Retorno Total (Simples)</div>
+          <div class="stat-value ${totalReturnSimple >= 0 ? 'green' : 'red'}">${totalReturnSimple >= 0 ? '+' : ''}${totalReturnSimple.toFixed(2)}%</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Retorno Composto (${firstYear}${firstYear !== lastYear ? '-' + lastYear : ''})</div>
+          <div class="stat-value ${totalReturnCompound >= 0 ? 'green' : 'red'}">${totalReturnCompound >= 0 ? '+' : ''}${totalReturnCompound.toFixed(2)}%</div>
+        </div>
+      `;
+      el("#backtestSummary").innerHTML = summaryHTML;
+
+      // Atualizar UI - Tabela de Trades
+      const tableHTML = allTrades.map((t, i) => `
+        <tr class="${t.profit >= 0 ? 'profit' : 'loss'}">
+          <td>${i + 1}</td>
+          <td>${t.buyDate.toLocaleDateString('pt-PT')} ${t.buyDate.toLocaleTimeString('pt-PT', {hour:'2-digit',minute:'2-digit'})}</td>
+          <td>$${t.buyPrice.toFixed(2)}</td>
+          <td>${t.sellDate.toLocaleDateString('pt-PT')} ${t.sellDate.toLocaleTimeString('pt-PT', {hour:'2-digit',minute:'2-digit'})}</td>
+          <td>$${t.sellPrice.toFixed(2)}</td>
+          <td style="color:${t.profit >= 0 ? '#2dd4bf' : '#f97373'};font-weight:bold;">$${t.profit.toFixed(2)}</td>
+          <td style="color:${t.profit >= 0 ? '#2dd4bf' : '#f97373'};font-weight:bold;">${t.profitPercent >= 0 ? '+' : ''}${t.profitPercent.toFixed(2)}%</td>
+        </tr>
+      `).join('');
+      el("#tradesTableBody").innerHTML = tableHTML;
+
+      console.log(`📊 Backtesting: ${totalTrades} trades | Win Rate: ${winRate.toFixed(1)}% | Retorno Composto: ${totalReturnCompound.toFixed(2)}%`);
+      
+      // Criar tabela de resultados mensais
+      const monthlyHTML = Object.keys(monthlyResults).sort().map(month => {
+        const data = monthlyResults[month];
+        const avgPercent = data.profitPercent;
+        return `
+          <tr class="${avgPercent >= 0 ? 'profit' : 'loss'}">
+            <td>${month}</td>
+            <td>${data.trades}</td>
+            <td style="color:${avgPercent >= 0 ? '#2dd4bf' : '#f97373'};font-weight:bold;">${avgPercent >= 0 ? '+' : ''}${avgPercent.toFixed(2)}%</td>
+          </tr>
+        `;
+      }).join('');
+      
+      // Criar tabela de resultados anuais
+      const yearlyHTML = Object.keys(yearlyResults).sort().map(year => {
+        const data = yearlyResults[year];
+        const avgPercent = data.profitPercent;
+        return `
+          <tr class="${avgPercent >= 0 ? 'profit' : 'loss'}">
+            <td>${year}</td>
+            <td>${data.trades}</td>
+            <td style="color:${avgPercent >= 0 ? '#2dd4bf' : '#f97373'};font-weight:bold;">${avgPercent >= 0 ? '+' : ''}${avgPercent.toFixed(2)}%</td>
+          </tr>
+        `;
+      }).join('');
+      
+      // Atualizar tabelas no DOM
+      console.log('Monthly results:', Object.keys(monthlyResults).length, 'months');
+      console.log('Yearly results:', Object.keys(yearlyResults).length, 'years');
+      
+      const monthlyTable = el("#monthlyTableBody");
+      const yearlyTable = el("#yearlyTableBody");
+      
+      if (monthlyTable) {
+        monthlyTable.innerHTML = monthlyHTML;
+        console.log('Monthly table updated');
+      } else {
+        console.error('Monthly table not found!');
+      }
+      
+      if (yearlyTable) {
+        yearlyTable.innerHTML = yearlyHTML;
+        console.log('Yearly table updated');
+      } else {
+        console.error('Yearly table not found!');
+      }
+    }
+  </script>
+</body>
+</html>
